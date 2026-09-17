@@ -1,0 +1,12 @@
+azure-identity>=1.17
+azure-keyvault-secrets>=4.8
+databricks-sqlalchemy>=2.0
+psycopg2-binary>=2.9
+pyspark==4.1.1
+sqlalchemy>=2.0
+
+# Vendor libraries are optional extras, not requirements. Install them only on
+# an entitled corporate machine:
+#   pip install '.[bloomberg]'   -> blpapi, needs a running Bloomberg Terminal
+#   pip install '.[lseg]'        -> lseg-data, needs a running LSEG Workspace
+#   pip install '.[vendors]'     -> both
