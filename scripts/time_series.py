@@ -1,9 +1,7 @@
 """Idempotent, vintage-preserving persistence of raw predictor observations.
 
-Predictor collectors store only published levels. Historical revisions receive a
-new vintage. A same-day revision is rejected because the fleet key uses a DATE
-vintage and cannot represent two distinct intraday information sets without
-rewriting history; retrying on the next UTC day preserves point-in-time safety.
+Predictor collectors store published levels. Later-day revisions receive a new
+vintage; a same-day change updates the existing DATE vintage in place.
 """
 
 from __future__ import annotations
@@ -104,6 +102,42 @@ def _write_inserts(conn: Connection, rows: list[dict[str, Any]]) -> None:
         conn.execute(_insert_statement(len(batch)), _batch_parameters(batch))
 
 
+def _write_updates(conn: Connection, rows: list[dict[str, Any]]) -> None:
+    """Update same-day vintages in batches; never issue one SQL call per row."""
+    update_batch_size = 100
+    if rows:
+        logger.info("Updating %d same-day rows in batches of %d", len(rows), update_batch_size)
+    for start in range(0, len(rows), update_batch_size):
+        batch = rows[start : start + update_batch_size]
+        params: dict[str, Any] = {}
+        predicates: list[str] = []
+        value_cases: list[str] = []
+        collected_cases: list[str] = []
+        for index, row in enumerate(batch):
+            predicate = (
+                f"(series_id = :series_id_{index} AND "
+                f"reference_date = :reference_date_{index} AND "
+                f"vintage_date = :vintage_date_{index})"
+            )
+            predicates.append(predicate)
+            value_cases.append(f"WHEN {predicate} THEN :value_{index}")
+            collected_cases.append(f"WHEN {predicate} THEN :collected_at_{index}")
+            params.update({f"{column}_{index}": row[column] for column in _COLUMNS})
+        conn.execute(
+            text(
+                f"UPDATE {_TABLE} SET value = CASE {' '.join(value_cases)} ELSE value END, "
+                f"collected_at = CASE {' '.join(collected_cases)} ELSE collected_at END "
+                f"WHERE {' OR '.join(predicates)}"
+            ),
+            params,
+        )
+        logger.info(
+            "Updated same-day batch %d/%d",
+            start // update_batch_size + 1,
+            (len(rows) + update_batch_size - 1) // update_batch_size,
+        )
+
+
 def upsert_time_series(
     conn: Connection, observations: list[Observation], collected_at: datetime
 ) -> WriteResult:
@@ -116,6 +150,7 @@ def upsert_time_series(
     for observation in incoming:
         by_series.setdefault(observation.series_id, []).append(observation)
     inserts: list[dict[str, Any]] = []
+    updates: list[dict[str, Any]] = []
     written_keys: list[tuple[str, date, date]] = []
     revised_keys: set[tuple[str, date, date]] = set()
     preexisting: set[str] = set()
@@ -147,18 +182,17 @@ def upsert_time_series(
                     continue
                 previous_vintage = _as_date(current["vintage_date"])
                 if previous_vintage == today:
-                    raise RuntimeError(
-                        f"Point-in-time unsafe same-day revision for {series_id} "
-                        f"{observation.reference_date}: existing={current['value']} "
-                        f"incoming={observation.value}. The schema uses DATE vintage_date; "
-                        "retry after the UTC date changes rather than overwriting history."
-                    )
+                    updates.append(row)
+                    written_keys.append((series_id, observation.reference_date, today))
+                    revised_keys.add((series_id, observation.reference_date, today))
+                    continue
                 revision_key = (series_id, observation.reference_date, today)
                 inserts.append(row)
                 written_keys.append(revision_key)
                 revised_keys.add(revision_key)
                 new_vintages += 1
     _write_inserts(conn, inserts)
+    _write_updates(conn, updates)
     logger.info("Time-series upsert: new=%d new_vintages=%d", new_observations, new_vintages)
     return WriteResult(
         new_observations,

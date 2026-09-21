@@ -149,15 +149,28 @@ def test_a_later_day_revision_adds_a_vintage_and_keeps_the_old_one(engine: Engin
     assert float(stored[-1][0]) == 99.0
 
 
-def test_a_same_day_revision_fails_closed(engine: Engine) -> None:
-    """A DATE vintage cannot represent two intraday information sets."""
+def test_a_same_day_revision_updates_one_vintage_without_lookahead(engine: Engine) -> None:
+    """A DATE vintage keeps its key and moves its availability forward."""
     rows = synthetic_rows(count=4)
     collected_at = datetime(2026, 9, 17, 9, tzinfo=UTC)
     _run(engine, _collect(rows), collected_at)
     revised = list(rows)
     revised[1] = VendorRow(reference_date=revised[1].reference_date, value=42.0)
-    with pytest.raises(RuntimeError, match="same-day revision"):
-        _run(engine, _collect(revised), datetime(2026, 9, 17, 17, tzinfo=UTC))
+    summary = _run(engine, _collect(revised), datetime(2026, 9, 17, 17, tzinfo=UTC))
+    assert summary["vintages"] == 0
+    with engine.connect() as conn:
+        versions = conn.execute(
+            text(
+                f"SELECT value FROM {SCHEMA_NAME}.time_series "
+                "WHERE series_id = :series_id AND reference_date = :reference_date"
+            ),
+            {"series_id": SERIES, "reference_date": revised[1].reference_date},
+        ).all()
+    assert [float(row[0]) for row in versions] == [42.0]
+    before = get_series_as_of(engine, SERIES, datetime(2026, 9, 17, 12, tzinfo=UTC))
+    assert all(float(row["value"]) != 42.0 for row in before)
+    after = get_series_as_of(engine, SERIES, datetime(2026, 9, 17, 17, tzinfo=UTC))
+    assert any(float(row["value"]) == 42.0 for row in after)
 
 
 def test_a_revision_is_first_seen_and_never_reuses_the_original_release(engine: Engine) -> None:
