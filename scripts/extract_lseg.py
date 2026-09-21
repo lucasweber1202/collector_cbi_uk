@@ -22,6 +22,7 @@ one failure this fleet cannot ship.
 from __future__ import annotations
 
 import logging
+import math
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -188,7 +189,7 @@ def _as_date(value: Any) -> date:
     if isinstance(value, date):
         return value
     if isinstance(value, str):
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+        return datetime.fromisoformat(value).date()
     if hasattr(value, "to_pydatetime"):
         return _as_date(value.to_pydatetime())
     raise TypeError(f"Cannot read {value!r} as a date")
@@ -199,7 +200,7 @@ def _as_datetime(value: Any) -> datetime:
     if isinstance(value, datetime):
         return value
     if isinstance(value, str):
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return datetime.fromisoformat(value)
     if hasattr(value, "to_pydatetime"):
         return _as_datetime(value.to_pydatetime())
     raise TypeError(f"Cannot read {value!r} as a timestamp")
@@ -231,7 +232,7 @@ def dataframe_to_records(frame: Any, field: str) -> list[dict[str, Any]]:
 
 def _is_missing(value: Any) -> bool:
     """True for None and for a float NaN, without importing pandas."""
-    return value is None or (isinstance(value, float) and value != value)
+    return value is None or (isinstance(value, float) and math.isnan(value))
 
 
 def fetch_series(  # pragma: no cover - requires a live Workspace

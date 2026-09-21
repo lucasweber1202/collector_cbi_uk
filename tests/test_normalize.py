@@ -8,9 +8,9 @@ import pytest
 
 from scripts.normalize import (
     VendorRow,
-    is_period_stamp,
     canonical_observations,
     compare_responses,
+    is_period_stamp,
     london_midnight_utc,
     normalise_reference_date,
     release_instants,

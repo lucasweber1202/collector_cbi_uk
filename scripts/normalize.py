@@ -94,7 +94,7 @@ def london_midnight_utc(day: date) -> datetime:
 def _as_date(value: date | datetime | str) -> date:
     """Coerce a provider stamp to a plain date."""
     if isinstance(value, str):
-        value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        value = datetime.fromisoformat(value)
     if isinstance(value, datetime):
         value = value.date()
     if not isinstance(value, date):

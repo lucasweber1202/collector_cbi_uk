@@ -51,7 +51,9 @@ warn_unused_ignores = false
 line-length = 100
 target-version = "py311"
 extend-exclude = ["*.md"]
-
 [tool.ruff.lint.per-file-ignores]
 # This file is byte-identical to collector_template/GUIDELINES.md §8.9.
 "scripts/databricks_engine.py" = ["S110", "BLE001"]
+"tests/test_normalize.py" = ["DTZ001"]
+"tests/test_persistence.py" = ["DTZ001"]
+"tests/test_vendor_adapters.py" = ["DTZ001"]
