@@ -32,6 +32,7 @@ METADATA_TABLE = "metadata"
 TIME_SERIES_TABLE = "time_series"
 AVAILABILITY_TABLE = "availability"
 SNAPSHOTS_TABLE = "source_snapshots"
+VENDOR_PROVENANCE_TABLE = "vendor_provenance"
 LOGS_TABLE = "logs"
 COUNTRY_CURRENCY = "GBP"
 

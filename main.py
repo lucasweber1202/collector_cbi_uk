@@ -26,6 +26,7 @@ from scripts.metadata import upsert_metadata
 from scripts.run_logs import insert_run_log
 from scripts.snapshots import upsert_snapshots
 from scripts.time_series import WriteResult, upsert_time_series
+from scripts.vendor_provenance import upsert_vendor_provenance
 
 logger = logging.getLogger("main")
 TRANSACTIONAL_DIALECTS = frozenset({"postgresql", "sqlite"})
@@ -124,15 +125,20 @@ def collect_source(engine: Engine) -> None:
         rows = availability_rows(data, result, collected_at)
         availability_written = upsert_availability(conn, rows, collected_at)
         metadata_inserted, metadata_updated = upsert_metadata(conn, data.catalog, collected_at)
+        vendor_inserted, vendor_updated = upsert_vendor_provenance(
+            conn, data.catalog, collected_at
+        )
     logger.info(
         "result: new_observations=%d new_vintages=%d availability=%d snapshots=%d "
-        "metadata_inserted=%d metadata_updated=%d skipped_series=%d",
+        "metadata_inserted=%d metadata_updated=%d vendor_inserted=%d vendor_updated=%d skipped_series=%d",
         result.new_observations,
         result.new_vintages,
         availability_written,
         snapshots_written,
         metadata_inserted,
         metadata_updated,
+        vendor_inserted,
+        vendor_updated,
         len(data.skipped),
     )
 
