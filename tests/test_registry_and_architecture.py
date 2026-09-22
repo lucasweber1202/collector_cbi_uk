@@ -116,6 +116,7 @@ def test_the_publisher_is_brc_for_every_series() -> None:
     for series in ALL_SERIES:
         fields = series.metadata_fields()
         assert fields["original_publisher"] == "Confederation of British Industry"
+        assert fields["unit"] == "percent"
 
 
 def test_series_ids_are_unique() -> None:

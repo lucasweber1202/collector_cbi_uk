@@ -168,7 +168,7 @@ def _series(
         category=category,
         measure=measure,
         stance=stance,
-        unit="balance",
+        unit="percent",
         frequency=FREQUENCIES[survey],
         eco_group=eco_group,
         priority=priority,
