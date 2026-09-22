@@ -57,6 +57,7 @@ def build_sqlite_engine(tmp_path: Path) -> Engine:
     with engine.begin() as conn:
         for statement in (
             init_db.CREATE_METADATA_TABLE,
+            init_db.CREATE_VENDOR_PROVENANCE_TABLE,
             init_db.CREATE_TIME_SERIES_TABLE.format(double="DOUBLE"),
             init_db.CREATE_AVAILABILITY_TABLE,
             init_db.CREATE_SNAPSHOTS_TABLE,

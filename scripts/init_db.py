@@ -32,25 +32,9 @@ DEFAULT_DOUBLE_TYPE = "DOUBLE"
 
 CREATE_SCHEMA = f"CREATE SCHEMA IF NOT EXISTS {SCHEMA_NAME}"
 
-# Two documented deviations from the fleet metadata DDL.
-#
-# 1. `source_id` carries the source_registry.csv key, as in
-#    collector_predictor_template, so a predictor row can be traced to its
-#    registry entry without parsing the identifier.
-# 2. Vendor provenance columns. This collector does not download a file from the
-#    publisher: CBI is the economic publisher, and the data reaches us through a
-#    licensed delivery provider (Bloomberg or LSEG). The economic identity of a
-#    series and the vendor route used to obtain it are different facts, and
-#    collapsing them would make the delivery provider look like the publisher.
-#    `original_publisher` therefore always names CBI, while
-#    `delivery_provider`, `vendor_series_id` and `vendor_field` record the route
-#    that produced the stored history. A series whose vendor identifier has not
-#    been confirmed inside the corporate environment carries the explicit
-#    sentinel PENDING_VENDOR_DISCOVERY rather than a guess.
 CREATE_METADATA_TABLE = f"""
 CREATE TABLE IF NOT EXISTS {SCHEMA_NAME}.{METADATA_TABLE} (
     series_id VARCHAR(200) NOT NULL,
-    source_id VARCHAR(100) NOT NULL,
     name VARCHAR(500) NOT NULL,
     description VARCHAR(2000),
     country VARCHAR(3) NOT NULL,
@@ -62,6 +46,16 @@ CREATE TABLE IF NOT EXISTS {SCHEMA_NAME}.{METADATA_TABLE} (
     eco_group VARCHAR(250),
     source_url VARCHAR(1000) NOT NULL,
     last_publish_date DATE,
+    collected_at TIMESTAMP NOT NULL,
+    CONSTRAINT pk_metadata PRIMARY KEY (series_id)
+)
+"""
+
+# Source-specific licensed delivery provenance lives beside the fleet metadata.
+CREATE_VENDOR_PROVENANCE_TABLE = f"""
+CREATE TABLE IF NOT EXISTS {SCHEMA_NAME}.vendor_provenance (
+    series_id VARCHAR(200) NOT NULL,
+    source_id VARCHAR(100) NOT NULL,
     seasonal_adjustment VARCHAR(30) NOT NULL,
     original_publisher VARCHAR(200) NOT NULL,
     delivery_provider VARCHAR(30) NOT NULL,
@@ -79,7 +73,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA_NAME}.{METADATA_TABLE} (
     license_context VARCHAR(500) NOT NULL,
     history_start DATE,
     collected_at TIMESTAMP NOT NULL,
-    CONSTRAINT pk_metadata PRIMARY KEY (series_id)
+    CONSTRAINT pk_vendor_provenance PRIMARY KEY (series_id)
 )
 """
 
@@ -174,6 +168,7 @@ def init_db(engine: Engine) -> None:
         for statement in (
             CREATE_SCHEMA,
             CREATE_METADATA_TABLE,
+            CREATE_VENDOR_PROVENANCE_TABLE,
             CREATE_TIME_SERIES_TABLE.format(double=double),
             CREATE_AVAILABILITY_TABLE,
             CREATE_SNAPSHOTS_TABLE,

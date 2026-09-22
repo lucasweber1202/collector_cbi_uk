@@ -12,10 +12,10 @@ this collector stores.
 
 **Bloomberg** and **LSEG** are licensed delivery providers: how the desk lawfully
 obtains the balances, not their author. The distinction is enforced in code, not
-only in prose — `metadata.original_publisher` must name CBI, and
+only in prose — `vendor_provenance.original_publisher` must name CBI, and
 `scripts/metadata.py` rejects a row that names a delivery provider there.
-Provider identity lives in `metadata.delivery_provider`,
-`metadata.vendor_series_id`, `metadata.vendor_field` and in the vendor columns of
+Provider identity lives in `vendor_provenance.delivery_provider`,
+`vendor_provenance.vendor_series_id`, `vendor_provenance.vendor_field` and in the vendor columns of
 `source_snapshots`.
 
 This is why there is no `collector_bloomberg_uk` and no `collector_reuters_uk`. A
@@ -67,14 +67,14 @@ them as one series would put a forward-looking number in a realised series — a
 look-ahead built into the data model, which no point-in-time machinery
 downstream could undo.
 
-## The five tables
+## Database tables
 
-`metadata`, `time_series`, `availability`, `source_snapshots`, `logs` — the fleet
+`metadata`, `time_series`, `availability`, `source_snapshots`, `logs`, `vendor_provenance` — the fleet
 shape, in a schema named `collector_cbi_uk`.
 
 Two documented deviations, forced by the delivery model rather than chosen:
 
-1. `metadata` carries vendor provenance and survey dimensions
+1. `vendor_provenance` carries vendor provenance and survey dimensions
    (`original_publisher`, `delivery_provider`, `vendor_series_id`,
    `vendor_field`, `vendor_description`, `survey`, `sector`, `measure`,
    `category`, `stance`, `seasonal_adjustment`, `reference_date_rule`,

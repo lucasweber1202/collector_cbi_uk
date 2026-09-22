@@ -119,7 +119,6 @@ _VENDOR_COLUMNS = (
     "history_start",
 )
 _COMPARABLE_COLUMNS = (
-    "source_id",
     "name",
     "description",
     "country",
@@ -131,9 +130,10 @@ _COMPARABLE_COLUMNS = (
     "eco_group",
     "source_url",
     "last_publish_date",
-    *_VENDOR_COLUMNS,
 )
 _COLUMNS = ("series_id", *_COMPARABLE_COLUMNS, "collected_at")
+_PROVENANCE_COLUMNS = ("series_id", "source_id", *_VENDOR_COLUMNS, "collected_at")
+_PROVENANCE_TABLE = f"{SCHEMA_NAME}.vendor_provenance"
 _UPDATE_COLUMNS = tuple(column for column in _COLUMNS if column != "series_id")
 _MERGE_DIALECTS = frozenset({"databricks", "postgresql"})
 _SELECT_SQL = text(f"SELECT {', '.join(_COLUMNS)} FROM {_TABLE}")
@@ -246,7 +246,6 @@ def upsert_metadata(
         desired.append(
             {
                 "series_id": series_id,
-                "source_id": fields["source_id"],
                 "name": fields["name"],
                 "description": fields.get("description"),
                 "country": COUNTRY_CURRENCY,
@@ -259,7 +258,6 @@ def upsert_metadata(
                 "source_url": fields["source_url"],
                 "last_publish_date": fields.get("last_publish_date")
                 or _as_date(history["last_collected_at"]),
-                **{column: fields.get(column) for column in _VENDOR_COLUMNS},
                 "collected_at": collected_at,
             }
         )
@@ -282,7 +280,96 @@ def upsert_metadata(
                 conn.execute(_merge_statement(len(batch)), _batch_parameters(batch))
         else:
             conn.execute(_UPDATE_SQL, updates)
-    return len(inserts), len(updates)
+    provenance_updates = _upsert_vendor_provenance(conn, catalog, aggregates, collected_at)
+    return len(inserts), len(updates) + provenance_updates
+
+
+def _upsert_vendor_provenance(
+    conn: Connection,
+    catalog: dict[str, dict[str, Any]],
+    aggregates: dict[str, dict[str, Any]],
+    collected_at: datetime,
+) -> int:
+    """Persist source-specific vendor identity apart from fleet base metadata."""
+    columns = _PROVENANCE_COLUMNS
+    existing = {
+        str(row["series_id"]): dict(row)
+        for row in conn.execute(
+            text(f"SELECT {', '.join(columns)} FROM {_PROVENANCE_TABLE}")
+        ).mappings()
+    }
+    desired = [
+        {
+            "series_id": series_id,
+            "source_id": fields["source_id"],
+            **{column: fields.get(column) for column in _VENDOR_COLUMNS},
+            "collected_at": collected_at,
+        }
+        for series_id, fields in sorted(catalog.items())
+        if series_id in aggregates
+    ]
+    inserts = [row for row in desired if row["series_id"] not in existing]
+    updates = [
+        row
+        for row in desired
+        if (stored := existing.get(row["series_id"])) is not None
+        and any(
+            _normalize(row[column]) != _normalize(stored.get(column)) for column in columns[1:-1]
+        )
+    ]
+    for start in range(0, len(inserts), BATCH_SIZE):
+        batch = inserts[start : start + BATCH_SIZE]
+        values = ", ".join(
+            "(" + ", ".join(f":{column}_{index}" for column in columns) + ")"
+            for index in range(len(batch))
+        )
+        parameters = {
+            f"{column}_{index}": row[column]
+            for index, row in enumerate(batch)
+            for column in columns
+        }
+        conn.execute(
+            text(f"INSERT INTO {_PROVENANCE_TABLE} ({', '.join(columns)}) VALUES {values}"),
+            parameters,
+        )
+        logger.info(
+            "Vendor provenance insert batch %d/%d",
+            start // BATCH_SIZE + 1,
+            (len(inserts) + BATCH_SIZE - 1) // BATCH_SIZE,
+        )
+    if updates:
+        if conn.dialect.name in _MERGE_DIALECTS:
+            for start in range(0, len(updates), BATCH_SIZE):
+                batch = updates[start : start + BATCH_SIZE]
+                source = " UNION ALL ".join(
+                    "SELECT " + ", ".join(f":{column}_{index} AS {column}" for column in columns)
+                    for index in range(len(batch))
+                )
+                assignments = ", ".join(f"{column} = source.{column}" for column in columns[1:])
+                params = {
+                    f"{column}_{index}": row[column]
+                    for index, row in enumerate(batch)
+                    for column in columns
+                }
+                conn.execute(
+                    text(
+                        f"MERGE INTO {_PROVENANCE_TABLE} AS target USING ({source}) AS source "
+                        f"ON target.series_id = source.series_id WHEN MATCHED THEN UPDATE SET {assignments}"
+                    ),
+                    params,
+                )
+                logger.info(
+                    "Vendor provenance update batch %d/%d",
+                    start // BATCH_SIZE + 1,
+                    (len(updates) + BATCH_SIZE - 1) // BATCH_SIZE,
+                )
+        else:
+            assignments = ", ".join(f"{column}=:{column}" for column in columns[1:])
+            conn.execute(
+                text(f"UPDATE {_PROVENANCE_TABLE} SET {assignments} WHERE series_id=:series_id"),
+                updates,
+            )
+    return len(updates)
 
 
 def _normalize(value: object) -> object:
