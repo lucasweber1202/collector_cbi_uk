@@ -17,6 +17,7 @@ from scripts.series_catalog import (
     SERIES_BY_ID,
     SERVICE_SECTOR,
     SURVEYS,
+    describe_series_id,
     parse_series_id,
 )
 from scripts.vendor_registry import FIELDNAMES, PENDING, load_registry, pending_for, resolved_for
@@ -99,9 +100,9 @@ def test_series_ids_are_economic_and_carry_no_vendor_identity() -> None:
             assert vendor_token not in upper
 
 
-def test_every_series_id_round_trips_through_parse_series_id() -> None:
+def test_every_series_id_decomposes_to_its_catalog_facts() -> None:
     for series in ALL_SERIES:
-        publisher, survey, sector, category, measure = parse_series_id(series.series_id)
+        publisher, survey, sector, category, measure = describe_series_id(series.series_id)
         assert publisher == "CBI"
         assert (survey, sector, category, measure) == (
             series.survey,
@@ -309,3 +310,11 @@ def test_scripts_is_a_flat_module_directory() -> None:
         if entry.is_dir() and entry.name != "__pycache__"
     ]
     assert subdirectories == []
+
+
+def test_every_series_id_round_trips(_: None = None) -> None:
+    """The fleet contract: build_series_id(*parse_series_id(sid)) == sid."""
+    from scripts.extract import build_series_id
+
+    for series in ALL_SERIES:
+        assert build_series_id(*parse_series_id(series.series_id)) == series.series_id

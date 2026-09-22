@@ -396,11 +396,11 @@ PRIORITY_PRICE_SERIES: tuple[SeriesDefinition, ...] = tuple(
 )
 
 
-def parse_series_id(series_id: str) -> tuple[str, str, str, str, str]:
+def describe_series_id(series_id: str) -> tuple[str, str, str, str, str]:
     """Decompose a canonical id into (publisher, survey, sector, category, measure)."""
     definition = SERIES_BY_ID.get(series_id)
     if definition is None:
-        raise KeyError(f"{series_id} is not a canonical CBI series")
+        raise ValueError(f"{series_id} is not a canonical CBI series")
     return (
         "CBI",
         definition.survey,
@@ -408,3 +408,17 @@ def parse_series_id(series_id: str) -> tuple[str, str, str, str, str]:
         definition.category,
         definition.measure,
     )
+
+
+def parse_series_id(series_id: str) -> tuple[str, ...]:
+    """Split a canonical id into its raw underscore components.
+
+    This is the fleet contract (GUIDELINES.md 4): uppercase, underscore
+    separated, ordered coarse -> fine, and exactly reversible, so
+    build_series_id(*parse_series_id(sid)) == sid. The semantic view -- which
+    survey, category and measure an id denotes -- is describe_series_id, and
+    the catalog itself carries those facts.
+    """
+    if series_id not in SERIES_BY_ID:
+        raise ValueError(f"{series_id} is not a canonical CBI series")
+    return tuple(series_id.split("_"))

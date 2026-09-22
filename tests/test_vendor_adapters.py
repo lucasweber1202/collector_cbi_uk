@@ -40,25 +40,25 @@ class FakeElement:
         self._values = values or {}
         self._array = array or []
 
-    def hasElement(self, name: str) -> bool:  # noqa: N802 - mirrors the blpapi API
+    def hasElement(self, name: str) -> bool:
         return name in self._values
 
-    def getElement(self, name: str) -> Any:  # noqa: N802
+    def getElement(self, name: str) -> Any:
         return self._values[name]
 
-    def numValues(self) -> int:  # noqa: N802
+    def numValues(self) -> int:
         return len(self._array)
 
-    def getValueAsElement(self, index: int) -> FakeElement:  # noqa: N802
+    def getValueAsElement(self, index: int) -> FakeElement:
         return self._array[index]
 
-    def getElementAsString(self, name: str) -> str:  # noqa: N802
+    def getElementAsString(self, name: str) -> str:
         return str(self._values[name])
 
-    def getElementAsFloat(self, name: str) -> float:  # noqa: N802
+    def getElementAsFloat(self, name: str) -> float:
         return float(self._values[name])
 
-    def getElementAsDatetime(self, name: str) -> Any:  # noqa: N802
+    def getElementAsDatetime(self, name: str) -> Any:
         return self._values[name]
 
 

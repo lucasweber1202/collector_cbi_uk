@@ -12,15 +12,16 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from scripts.config import (
-    VENDOR_PROVENANCE_TABLE,
     AVAILABILITY_TABLE,
     LOGS_TABLE,
     METADATA_TABLE,
     SCHEMA_NAME,
     SNAPSHOTS_TABLE,
     TIME_SERIES_TABLE,
+    VENDOR_PROVENANCE_TABLE,
 )
 from scripts.db import build_engine
+from scripts.legacy_schema import migrate_legacy_metadata
 
 # PostgreSQL and Databricks SQL share no spelling for a 64-bit float. Spark's
 # parser lists DOUBLE as the only alias for DoubleType, so Databricks rejects
@@ -32,6 +33,28 @@ DOUBLE_TYPES = {"postgresql": "DOUBLE PRECISION"}
 DEFAULT_DOUBLE_TYPE = "DOUBLE"
 
 CREATE_SCHEMA = f"CREATE SCHEMA IF NOT EXISTS {SCHEMA_NAME}"
+
+# Legacy metadata columns that must be copied into a sidecar before they
+# are dropped, as {column: sidecar table}. These are the vendor fields a
+# pre-canonical DDL put inside `metadata`; their home is vendor_provenance.
+LEGACY_METADATA_ARCHIVE: dict[str, str] = {
+    "seasonal_adjustment": VENDOR_PROVENANCE_TABLE,
+    "original_publisher": VENDOR_PROVENANCE_TABLE,
+    "delivery_provider": VENDOR_PROVENANCE_TABLE,
+    "vendor_series_id": VENDOR_PROVENANCE_TABLE,
+    "vendor_field": VENDOR_PROVENANCE_TABLE,
+    "vendor_description": VENDOR_PROVENANCE_TABLE,
+    "survey": VENDOR_PROVENANCE_TABLE,
+    "measure": VENDOR_PROVENANCE_TABLE,
+    "category": VENDOR_PROVENANCE_TABLE,
+    "reference_date_rule": VENDOR_PROVENANCE_TABLE,
+    "release_rule": VENDOR_PROVENANCE_TABLE,
+    "revision_policy": VENDOR_PROVENANCE_TABLE,
+    "license_context": VENDOR_PROVENANCE_TABLE,
+    "history_start": VENDOR_PROVENANCE_TABLE,
+    "stance": VENDOR_PROVENANCE_TABLE,
+    "sector": VENDOR_PROVENANCE_TABLE,
+}
 
 # Two documented deviations from the fleet metadata DDL.
 #
@@ -192,6 +215,9 @@ def init_db(engine: Engine) -> None:
             CREATE_LOGS_TABLE,
         ):
             conn.execute(text(statement))
+        # CREATE TABLE IF NOT EXISTS leaves a pre-canonical table untouched,
+        # so the live shape is checked against the standardized columns.
+        migrate_legacy_metadata(conn, LEGACY_METADATA_ARCHIVE)
 
 
 if __name__ == "__main__":

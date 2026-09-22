@@ -57,16 +57,13 @@ _UPDATE_SQL = text(
 
 def _batch_parameters(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {
-        f"{column}_{index}": row[column]
-        for index, row in enumerate(rows)
-        for column in _COLUMNS
+        f"{column}_{index}": row[column] for index, row in enumerate(rows) for column in _COLUMNS
     }
 
 
 def _insert_statement(count: int) -> TextClause:
     values = ", ".join(
-        "(" + ", ".join(f":{column}_{index}" for column in _COLUMNS) + ")"
-        for index in range(count)
+        "(" + ", ".join(f":{column}_{index}" for column in _COLUMNS) + ")" for index in range(count)
     )
     return text(f"INSERT INTO {_TABLE} ({', '.join(_COLUMNS)}) VALUES {values}")
 
@@ -93,8 +90,7 @@ def upsert_vendor_provenance(
 ) -> tuple[int, int]:
     """Upsert one provenance row per catalogued series. Returns (inserted, updated)."""
     existing = {
-        str(row["series_id"]): dict(row)
-        for row in conn.execute(_SELECT_SQL).mappings().all()
+        str(row["series_id"]): dict(row) for row in conn.execute(_SELECT_SQL).mappings().all()
     }
     desired = [
         {
@@ -105,14 +101,13 @@ def upsert_vendor_provenance(
         for series_id, fields in sorted(catalog.items())
     ]
 
-    inserts = [row for row in desired if row["series_id"] not in existing]
+    inserts = [row for row in desired if str(row["series_id"]) not in existing]
     updates = [
         row
         for row in desired
-        if (current := existing.get(row["series_id"])) is not None
+        if (current := existing.get(str(row["series_id"]))) is not None
         and any(
-            _normalize(row[column]) != _normalize(current.get(column))
-            for column in VENDOR_COLUMNS
+            _normalize(row[column]) != _normalize(current.get(column)) for column in VENDOR_COLUMNS
         )
     ]
 
@@ -120,7 +115,9 @@ def upsert_vendor_provenance(
         total_batches = (len(inserts) + BATCH_SIZE - 1) // BATCH_SIZE
         logger.info(
             "Inserting %d vendor provenance rows in %d batches of %d",
-            len(inserts), total_batches, BATCH_SIZE,
+            len(inserts),
+            total_batches,
+            BATCH_SIZE,
         )
         done = 0
         for index, start in enumerate(range(0, len(inserts), BATCH_SIZE), start=1):
@@ -129,14 +126,19 @@ def upsert_vendor_provenance(
             done += len(batch)
             logger.info(
                 "Inserted batch %d/%d (%d/%d rows)",
-                index, total_batches, done, len(inserts),
+                index,
+                total_batches,
+                done,
+                len(inserts),
             )
 
     if updates:
         total_batches = (len(updates) + BATCH_SIZE - 1) // BATCH_SIZE
         logger.info(
             "Updating %d vendor provenance rows in %d batches of %d",
-            len(updates), total_batches, BATCH_SIZE,
+            len(updates),
+            total_batches,
+            BATCH_SIZE,
         )
         done = 0
         if conn.dialect.name in _MERGE_DIALECTS:
@@ -146,12 +148,13 @@ def upsert_vendor_provenance(
                 done += len(batch)
                 logger.info(
                     "Updated batch %d/%d (%d/%d rows)",
-                    index, total_batches, done, len(updates),
+                    index,
+                    total_batches,
+                    done,
+                    len(updates),
                 )
         else:
             conn.execute(_UPDATE_SQL, updates)
 
-    logger.info(
-        "Vendor provenance upsert: inserted=%d updated=%d", len(inserts), len(updates)
-    )
+    logger.info("Vendor provenance upsert: inserted=%d updated=%d", len(inserts), len(updates))
     return len(inserts), len(updates)
