@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from scripts.config import (
+    VENDOR_PROVENANCE_TABLE,
     AVAILABILITY_TABLE,
     LOGS_TABLE,
     METADATA_TABLE,
@@ -50,7 +51,6 @@ CREATE_SCHEMA = f"CREATE SCHEMA IF NOT EXISTS {SCHEMA_NAME}"
 CREATE_METADATA_TABLE = f"""
 CREATE TABLE IF NOT EXISTS {SCHEMA_NAME}.{METADATA_TABLE} (
     series_id VARCHAR(200) NOT NULL,
-    source_id VARCHAR(100) NOT NULL,
     name VARCHAR(500) NOT NULL,
     description VARCHAR(2000),
     country VARCHAR(3) NOT NULL,
@@ -62,22 +62,6 @@ CREATE TABLE IF NOT EXISTS {SCHEMA_NAME}.{METADATA_TABLE} (
     eco_group VARCHAR(250),
     source_url VARCHAR(1000) NOT NULL,
     last_publish_date DATE,
-    seasonal_adjustment VARCHAR(30) NOT NULL,
-    original_publisher VARCHAR(200) NOT NULL,
-    delivery_provider VARCHAR(30) NOT NULL,
-    vendor_series_id VARCHAR(200) NOT NULL,
-    vendor_field VARCHAR(100) NOT NULL,
-    vendor_description VARCHAR(1000),
-    survey VARCHAR(100) NOT NULL,
-    sector VARCHAR(50) NOT NULL,
-    measure VARCHAR(50) NOT NULL,
-    category VARCHAR(100) NOT NULL,
-    stance VARCHAR(30) NOT NULL,
-    reference_date_rule VARCHAR(500) NOT NULL,
-    release_rule VARCHAR(500) NOT NULL,
-    revision_policy VARCHAR(200) NOT NULL,
-    license_context VARCHAR(500) NOT NULL,
-    history_start DATE,
     collected_at TIMESTAMP NOT NULL,
     CONSTRAINT pk_metadata PRIMARY KEY (series_id)
 )
@@ -149,6 +133,33 @@ CREATE TABLE IF NOT EXISTS {SCHEMA_NAME}.{SNAPSHOTS_TABLE} (
 )
 """
 
+# Vendor delivery provenance, one row per series. Source-specific columns are
+# forbidden in the standardized `metadata` table (GUIDELINES.md §3, §11), but the
+# licensed delivery path must stay auditable, so they live in this sidecar.
+CREATE_VENDOR_PROVENANCE_TABLE = f"""
+CREATE TABLE IF NOT EXISTS {SCHEMA_NAME}.{VENDOR_PROVENANCE_TABLE} (
+    series_id VARCHAR(200) NOT NULL,
+    seasonal_adjustment VARCHAR(30) NOT NULL,
+    original_publisher VARCHAR(200) NOT NULL,
+    delivery_provider VARCHAR(30) NOT NULL,
+    vendor_series_id VARCHAR(200) NOT NULL,
+    vendor_field VARCHAR(100) NOT NULL,
+    vendor_description VARCHAR(1000),
+    survey VARCHAR(100) NOT NULL,
+    sector VARCHAR(50) NOT NULL,
+    measure VARCHAR(50) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    stance VARCHAR(30) NOT NULL,
+    reference_date_rule VARCHAR(500) NOT NULL,
+    release_rule VARCHAR(500) NOT NULL,
+    revision_policy VARCHAR(200) NOT NULL,
+    license_context VARCHAR(500) NOT NULL,
+    history_start DATE,
+    collected_at TIMESTAMP NOT NULL,
+    CONSTRAINT pk_vendor_provenance PRIMARY KEY (series_id)
+)
+"""
+
 CREATE_LOGS_TABLE = f"""
 CREATE TABLE IF NOT EXISTS {SCHEMA_NAME}.{LOGS_TABLE} (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
@@ -177,6 +188,7 @@ def init_db(engine: Engine) -> None:
             CREATE_TIME_SERIES_TABLE.format(double=double),
             CREATE_AVAILABILITY_TABLE,
             CREATE_SNAPSHOTS_TABLE,
+            CREATE_VENDOR_PROVENANCE_TABLE,
             CREATE_LOGS_TABLE,
         ):
             conn.execute(text(statement))
