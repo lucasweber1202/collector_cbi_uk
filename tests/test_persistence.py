@@ -29,8 +29,8 @@ from scripts.extract import CollectedData, assemble
 from scripts.metadata import upsert_metadata
 from scripts.normalize import VendorRow
 from scripts.snapshots import upsert_snapshots
-from scripts.vendor_provenance import upsert_vendor_provenance
 from scripts.time_series import upsert_time_series
+from scripts.vendor_provenance import upsert_vendor_provenance
 from tests.conftest import (
     bloomberg_response,
     lseg_response,
@@ -155,15 +155,21 @@ def test_a_later_day_revision_adds_a_vintage_and_keeps_the_old_one(engine: Engin
     assert float(stored[-1][0]) == 99.0
 
 
-def test_a_same_day_revision_fails_closed(engine: Engine) -> None:
-    """A DATE vintage cannot represent two intraday information sets."""
+def test_a_same_day_revision_updates_in_place(engine: Engine) -> None:
+    """A DATE vintage holds one row per day, so the latest collection wins."""
     rows = synthetic_rows(count=4)
-    collected_at = datetime(2026, 9, 17, 9, tzinfo=UTC)
-    _run(engine, _collect(rows), collected_at)
+    _run(engine, _collect(rows), datetime(2026, 9, 17, 9, tzinfo=UTC))
     revised = list(rows)
     revised[1] = VendorRow(reference_date=revised[1].reference_date, value=42.0)
-    with pytest.raises(RuntimeError, match="same-day revision"):
-        _run(engine, _collect(revised), datetime(2026, 9, 17, 17, tzinfo=UTC))
+    summary = _run(engine, _collect(revised), datetime(2026, 9, 17, 17, tzinfo=UTC))
+    assert summary["vintages"] == 0, "a same-day revision opens no new vintage"
+    assert _count(engine, "time_series") == 4, "and creates no extra row"
+    with engine.connect() as conn:
+        stored = conn.execute(
+            text(f"SELECT value FROM {SCHEMA_NAME}.time_series WHERE reference_date = :ref"),
+            {"ref": revised[1].reference_date},
+        ).scalar_one()
+    assert stored == 42.0, "the latest collection of the day must win"
 
 
 def test_a_revision_is_first_seen_and_never_reuses_the_original_release(engine: Engine) -> None:
@@ -316,7 +322,9 @@ def test_switching_provider_does_not_create_a_second_economic_series(engine: Eng
             .all()
         )
         provider = conn.execute(
-            text(f"SELECT delivery_provider FROM {SCHEMA_NAME}.vendor_provenance WHERE series_id = :s"),
+            text(
+                f"SELECT delivery_provider FROM {SCHEMA_NAME}.vendor_provenance WHERE series_id = :s"
+            ),
             {"s": SERIES},
         ).scalar_one()
     assert series_ids == [SERIES]
@@ -418,8 +426,7 @@ def test_the_two_service_sectors_are_separate_stored_series(engine: Engine) -> N
     with engine.connect() as conn:
         sectors = conn.execute(
             text(
-                f"SELECT series_id, sector FROM {SCHEMA_NAME}.vendor_provenance "
-                "ORDER BY series_id"
+                f"SELECT series_id, sector FROM {SCHEMA_NAME}.vendor_provenance ORDER BY series_id"
             )
         ).all()
     assert {row[1] for row in sectors} == {"consumer", "business_professional"}
