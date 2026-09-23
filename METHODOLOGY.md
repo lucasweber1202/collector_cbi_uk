@@ -42,6 +42,39 @@ the only open items are environment-bound. `pending_vendor_entitlement` would
 apply if entitlement were known to be absent. `implemented_verified` requires a
 real query against a real provider and is **not** claimed.
 
+## Unit vocabulary
+
+`scripts/metadata.py` validates every series against a controlled `UNITS` set,
+and this repository's copy carries one member the fleet-canonical set does not:
+`balance`.
+
+The canonical set, as shipped in `collector_predictor_template`, is `index`,
+`percent`, `ratio`, `persons`, `currency`, `count`, `tons`, `hectares`,
+`cubic_meters`, `megawatt_hours`, `other`.
+
+A CBI reading is a weighted net balance — the share of respondents reporting an
+increase minus the share reporting a decrease, in percentage points bounded by
+−100 and +100. Three candidate resolutions exist:
+
+| Option | Consequence |
+| --- | --- |
+| Map to `percent` | Silently wrong. A net balance is a difference of two percentages; a consumer that averages, compounds or annualises it as a rate produces nonsense. |
+| Map to `other` | Truthful but lossy. It discards the sign convention and the bounded scale, which are the properties that make these series usable as predictors. |
+| Extend the authority with `balance` | Correct, and reusable — any diffusion-index or net-balance survey in the fleet (CBI, and the BoE DMP and ONS BICS surveys) needs the same member. |
+
+This repository holds the third option locally and declares it here rather than
+resolving it by fiat. **While this divergence stands, the collector is not
+fleet-vocabulary conformant** and must not be reported as such, regardless of
+the test suite passing — the suite validates against the local set.
+
+Reconciling this is an authority decision: the canonical `UNITS` set in
+`guimasuko/collector_template` must either gain `balance` or rule it out, and
+this file follows that decision.
+
+Note that `collector_brc_uk` does **not** share this problem. The BRC Shop
+Price Index is a year-on-year percentage change, and that collector correctly
+emits `percent`, which is already canonical.
+
 ## What is collected
 
 27 published CBI balances across three surveys, described in the README. The
