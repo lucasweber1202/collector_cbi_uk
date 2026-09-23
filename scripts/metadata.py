@@ -39,31 +39,23 @@ FREQUENCIES = frozenset(
         "irregular",
     }
 )
-# UNIT VOCABULARY DIVERGENCE -- declared, not silent.
+# The fleet-canonical unit vocabulary, carried verbatim. Nothing is added here.
 #
-# "balance" is a local extension. The fleet-canonical set (collector_template
-# and collector_predictor_template, scripts/metadata.py) is exactly:
-#   index, percent, ratio, persons, currency, count, tons, hectares,
-#   cubic_meters, megawatt_hours, other
+# A CBI reading is a weighted net balance -- the share of respondents reporting
+# an increase minus the share reporting a decrease, in percentage points on
+# [-100, +100]. No canonical member names that, and "percent" would actively
+# mislead: a net balance is a difference of two percentages, not a percentage
+# of a whole, so averaging, compounding or annualising it as a rate is wrong.
 #
-# A CBI survey reading is a weighted net balance: the share of respondents
-# reporting an increase minus the share reporting a decrease, in percentage
-# points on [-100, +100]. It is a difference of two percentages, not a
-# percentage of a whole, so "percent" would misstate it -- a reader averaging
-# or compounding it as a rate would be wrong. No canonical member carries that
-# meaning, and "other" would erase the one property that makes these series
-# usable as predictors: their sign and bounded scale.
-#
-# This extension is therefore held here, visible, until the authority is
-# reconciled -- see METHODOLOGY.md, "Unit vocabulary". While it stands, this
-# collector is NOT fleet-vocabulary conformant, and must not be reported as
-# such. Resolving it is an authority decision, not a code change.
+# It is therefore published as "other", the canonical member for a quantity the
+# vocabulary does not name, and the net-balance semantics are carried by
+# metadata.stance = "balance" in the sidecar plus the per-series description.
+# See METHODOLOGY.md, "Unit vocabulary", for the loss this costs a consumer.
 UNITS = frozenset(
     {
         "index",
         "percent",
         "ratio",
-        "balance",
         "persons",
         "currency",
         "count",
