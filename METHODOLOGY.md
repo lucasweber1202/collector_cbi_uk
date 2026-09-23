@@ -44,36 +44,58 @@ real query against a real provider and is **not** claimed.
 
 ## Unit vocabulary
 
-`scripts/metadata.py` validates every series against a controlled `UNITS` set,
-and this repository's copy carries one member the fleet-canonical set does not:
-`balance`.
+`scripts/metadata.py` validates every series against the controlled `UNITS`
+set, and that set is now the fleet-canonical one **verbatim**, with nothing
+added:
 
-The canonical set, as shipped in `collector_predictor_template`, is `index`,
-`percent`, `ratio`, `persons`, `currency`, `count`, `tons`, `hectares`,
-`cubic_meters`, `megawatt_hours`, `other`.
+`index`, `percent`, `ratio`, `persons`, `currency`, `count`, `tons`,
+`hectares`, `cubic_meters`, `megawatt_hours`, `other`.
 
-A CBI reading is a weighted net balance — the share of respondents reporting an
+This repository previously carried a twelfth member, `balance`, so its own
+validation accepted a unit no other repository in the fleet would. That local
+extension has been removed. Every CBI series now publishes `unit = "other"`.
+
+### Why `other` and not `percent`
+
+A CBI reading is a weighted net balance: the share of respondents reporting an
 increase minus the share reporting a decrease, in percentage points bounded by
-−100 and +100. Three candidate resolutions exist:
+−100 and +100.
 
-| Option | Consequence |
-| --- | --- |
-| Map to `percent` | Silently wrong. A net balance is a difference of two percentages; a consumer that averages, compounds or annualises it as a rate produces nonsense. |
-| Map to `other` | Truthful but lossy. It discards the sign convention and the bounded scale, which are the properties that make these series usable as predictors. |
-| Extend the authority with `balance` | Correct, and reusable — any diffusion-index or net-balance survey in the fleet (CBI, and the BoE DMP and ONS BICS surveys) needs the same member. |
+`percent` would be actively wrong, not merely imprecise. A net balance is a
+*difference of two percentages*, not a percentage of a whole. A consumer that
+treats it as a rate — averaging it, compounding it, annualising it, or reading
++4 as "4% growth" — produces nonsense. `other` is the canonical member for a
+quantity the vocabulary does not name, and it is honest: it claims nothing.
 
-This repository holds the third option locally and declares it here rather than
-resolving it by fiat. **While this divergence stands, the collector is not
-fleet-vocabulary conformant** and must not be reported as such, regardless of
-the test suite passing — the suite validates against the local set.
+### What this costs, stated plainly
 
-Reconciling this is an authority decision: the canonical `UNITS` set in
-`guimasuko/collector_template` must either gain `balance` or rule it out, and
-this file follows that decision.
+`other` carries no information. On the `unit` field alone, a consumer cannot
+tell a CBI balance from any other unnamed quantity, and in particular cannot
+learn from it that the series is signed, bounded by ±100, or centred on zero.
+That is a real loss and it is not hidden here.
 
-Note that `collector_brc_uk` does **not** share this problem. The BRC Shop
-Price Index is a year-on-year percentage change, and that collector correctly
-emits `percent`, which is already canonical.
+The meaning is preserved in two places that do survive persistence:
+
+| Carrier | Where | Content |
+| --- | --- | --- |
+| `stance` | `vendor_provenance` sidecar, `VARCHAR(30) NOT NULL` | `balance` |
+| `description` | canonical `metadata` table | "…weighted percentage balance for … over the past/next three months…" |
+
+`tests/test_unit_vocabulary.py` pins all of this: `UNITS` must equal the
+canonical set exactly, no series may declare `balance` as its unit, and every
+series must still carry `stance = "balance"` and say "balance" in its
+description. Widening the vocabulary again fails the build.
+
+### The path that was not available
+
+The technically better outcome is for the authority to gain a `balance`
+member, since every diffusion-index and net-balance survey in the fleet needs
+it — CBI here, and the BoE DMP and ONS BICS surveys elsewhere. That requires
+changing `guimasuko/collector_template`, which was not reachable from the
+environment this work was done in, so it was not attempted rather than faked.
+If that member is later added upstream, the change here is two lines plus the
+constant in the test.
+
 
 ## What is collected
 
