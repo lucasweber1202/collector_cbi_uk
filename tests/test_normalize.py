@@ -23,6 +23,16 @@ from tests.conftest import bloomberg_response, lseg_response, synthetic_rows
 QUARTERLY = "CBI_SERVICE_SECTOR_CONSUMER_PRICES_CHARGED_EXPECTED"
 
 
+def naive(year: int, month: int, day: int, hour: int = 0, minute: int = 0) -> datetime:
+    """Build a vendor stamp carrying no zone, as the provider actually sends it.
+
+    The code under test is what decides these mean Europe/London. Stamping them
+    UTC here to satisfy DTZ001 would delete the behaviour the tests exist to
+    pin, so the zone stays absent and the rule is waived in this one place.
+    """
+    return datetime(year, month, day, hour, minute)  # noqa: DTZ001
+
+
 def test_month_stamps_collapse_to_the_first_of_the_month() -> None:
     """A provider may stamp a month at its start, its end, or a datetime inside it."""
     assert normalise_reference_date(date(2024, 3, 1)) == date(2024, 3, 1)
@@ -116,8 +126,8 @@ def test_a_non_canonical_series_id_is_refused() -> None:
 
 def test_naive_vendor_timestamps_are_read_as_london_not_utc() -> None:
     """A fixed offset would be wrong for half the year; the tz database is not."""
-    winter = to_utc(datetime(2024, 1, 15, 0, 1))
-    summer = to_utc(datetime(2024, 7, 15, 0, 1))
+    winter = to_utc(naive(2024, 1, 15, 0, 1))
+    summer = to_utc(naive(2024, 7, 15, 0, 1))
     assert winter.hour == 0 and winter.minute == 1  # GMT == UTC
     assert summer.hour == 23 and summer.day == 14  # BST is UTC+1, so 00:01 is the previous day
 
@@ -137,7 +147,7 @@ def test_aware_vendor_timestamps_are_converted_not_reinterpreted() -> None:
 def test_release_instants_omit_months_the_provider_did_not_timestamp() -> None:
     """Absence is recorded as absence, so the caller stamps first_seen instead."""
     rows = [
-        VendorRow(date(2024, 1, 1), 1.0, release_timestamp=datetime(2024, 2, 6, 0, 1)),
+        VendorRow(date(2024, 1, 1), 1.0, release_timestamp=naive(2024, 2, 6, 0, 1)),
         VendorRow(date(2024, 2, 1), 1.5),
     ]
     instants = release_instants(lseg_response(rows=rows))

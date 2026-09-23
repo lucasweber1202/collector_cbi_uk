@@ -47,6 +47,16 @@ REGISTRY = {
 }
 
 
+def naive(year: int, month: int, day: int, hour: int = 0, minute: int = 0) -> datetime:
+    """Build a vendor stamp carrying no zone, as the provider actually sends it.
+
+    The code under test is what decides these mean Europe/London. Stamping them
+    UTC here to satisfy DTZ001 would delete the behaviour the tests exist to
+    pin, so the zone stays absent and the rule is waived in this one place.
+    """
+    return datetime(year, month, day, hour, minute)  # noqa: DTZ001
+
+
 def _run(engine: Engine, data: CollectedData, collected_at: datetime) -> dict[str, int]:
     """Persist one collection exactly as main.collect_source does."""
     with engine.begin() as conn:
@@ -175,12 +185,12 @@ def test_a_same_day_revision_updates_in_place(engine: Engine) -> None:
 def test_a_revision_is_first_seen_and_never_reuses_the_original_release(engine: Engine) -> None:
     """A 2026 revision of a 2024 month must not appear in a 2024 backtest."""
     rows = [
-        VendorRow(date(2024, 1, 1), 4.0, release_timestamp=datetime(2024, 2, 6, 0, 1)),
-        VendorRow(date(2024, 2, 1), 6.0, release_timestamp=datetime(2024, 3, 5, 0, 1)),
+        VendorRow(date(2024, 1, 1), 4.0, release_timestamp=naive(2024, 2, 6, 0, 1)),
+        VendorRow(date(2024, 2, 1), 6.0, release_timestamp=naive(2024, 3, 5, 0, 1)),
     ]
     _run(engine, _collect(rows, provider="lseg"), datetime(2026, 9, 17, 9, tzinfo=UTC))
     revised = [
-        VendorRow(date(2024, 1, 1), 9.9, release_timestamp=datetime(2024, 2, 6, 0, 1)),
+        VendorRow(date(2024, 1, 1), 9.9, release_timestamp=naive(2024, 2, 6, 0, 1)),
         rows[1],
     ]
     revision_run = datetime(2026, 9, 18, 9, tzinfo=UTC)
@@ -247,7 +257,7 @@ def test_as_of_returns_the_vintage_current_at_that_instant(engine: Engine) -> No
 
 
 def test_a_provider_reported_instant_beats_first_seen(engine: Engine) -> None:
-    rows = [VendorRow(date(2024, 1, 1), 4.0, release_timestamp=datetime(2024, 2, 6, 0, 1))]
+    rows = [VendorRow(date(2024, 1, 1), 4.0, release_timestamp=naive(2024, 2, 6, 0, 1))]
     _run(engine, _collect(rows, provider="lseg"), datetime(2026, 9, 17, 9, tzinfo=UTC))
     stored = get_series_as_of(engine, SERIES, datetime(2024, 2, 6, 0, 1, tzinfo=UTC))
     assert len(stored) == 1
