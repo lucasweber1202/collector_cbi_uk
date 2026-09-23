@@ -31,6 +31,16 @@ QUERY = {"service": "//blp/refdata", "security": "TESTCBIDTSPE Index"}
 RETRIEVED = datetime(2026, 9, 17, tzinfo=UTC)
 
 
+def naive(year: int, month: int, day: int, hour: int = 0, minute: int = 0) -> datetime:
+    """Build a vendor stamp carrying no zone, as the provider actually sends it.
+
+    The code under test is what decides these mean Europe/London. Stamping them
+    UTC here to satisfy DTZ001 would delete the behaviour the tests exist to
+    pin, so the zone stays absent and the rule is waived in this one place.
+    """
+    return datetime(year, month, day, hour, minute)  # noqa: DTZ001
+
+
 class FakeElement:
     """A minimal stand-in for a blpapi Element."""
 
@@ -160,7 +170,7 @@ def test_lseg_parses_records_including_a_reported_release_instant() -> None:
         records, LSEG_MAPPING, {"universe": "TESTCBIDTSPE=ECI"}, RETRIEVED
     )
     assert response.provider == "lseg"
-    assert response.rows[0].release_timestamp == datetime(2024, 2, 6, 0, 1)
+    assert response.rows[0].release_timestamp == naive(2024, 2, 6, 0, 1)
     assert response.rows[1].release_timestamp is None
 
 

@@ -66,7 +66,6 @@ AKV_VAULT_URL = os.getenv("AKV_VAULT_URL", "")
 AKV_SECRET_NAME = os.getenv("AKV_SECRET_NAME", "databricks-token")
 
 # -- Source-specific constants below --------------------------------------
-_ENV_FILE = ROOT_DIR / ".env"
 METADATA_TABLE = "metadata"
 TIME_SERIES_TABLE = "time_series"
 AVAILABILITY_TABLE = "availability"
