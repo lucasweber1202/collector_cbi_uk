@@ -102,7 +102,7 @@ def _archive_before_drop(conn: Connection, columns: list[str], archive: dict[str
                 "the sidecar does not declare those columns. Run init_db first."
             )
         column_list = ", ".join(owned)
-        source_count = conn.execute(
+        source_count: int = conn.execute(
             text(f"SELECT COUNT(*) FROM {SCHEMA_NAME}.{METADATA_TABLE}")
         ).scalar_one()
         conn.execute(
@@ -117,7 +117,7 @@ def _archive_before_drop(conn: Connection, columns: list[str], archive: dict[str
                 "WHERE m.series_id = sidecar.series_id)"
             )
         )
-        copied = conn.execute(
+        copied: int = conn.execute(
             text(
                 f"SELECT COUNT(*) FROM {SCHEMA_NAME}.{target} sidecar "
                 f"WHERE EXISTS (SELECT 1 FROM {SCHEMA_NAME}.{METADATA_TABLE} m "
