@@ -173,10 +173,17 @@ CREATE TABLE IF NOT EXISTS {SCHEMA_NAME}.{VENDOR_PROVENANCE_TABLE} (
     measure VARCHAR(50) NOT NULL,
     category VARCHAR(100) NOT NULL,
     stance VARCHAR(30) NOT NULL,
-    reference_date_rule VARCHAR(500) NOT NULL,
-    release_rule VARCHAR(500) NOT NULL,
-    revision_policy VARCHAR(200) NOT NULL,
-    license_context VARCHAR(500) NOT NULL,
+    -- These four are documentation prose, not codes. `revision_policy` was
+    -- declared at 200 while the text this collector writes is longer than
+    -- that, so the first INSERT failed on PostgreSQL and would have failed on
+    -- Databricks. SQLite ignores VARCHAR lengths entirely, which is why a
+    -- SQLite-only test suite never saw it. All four now carry the same
+    -- headroom, and tests/test_column_widths.py checks every catalog value
+    -- against the width declared here so prose cannot outgrow its column again.
+    reference_date_rule VARCHAR(1000) NOT NULL,
+    release_rule VARCHAR(1000) NOT NULL,
+    revision_policy VARCHAR(1000) NOT NULL,
+    license_context VARCHAR(1000) NOT NULL,
     history_start DATE,
     collected_at TIMESTAMP NOT NULL,
     CONSTRAINT pk_vendor_provenance PRIMARY KEY (series_id)

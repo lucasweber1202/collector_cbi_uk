@@ -143,9 +143,39 @@ def _insert_statement(count: int) -> TextClause:
     return text(f"INSERT INTO {_TABLE} ({', '.join(_COLUMNS)}) VALUES {values}")
 
 
+# A MERGE's source rows are bare parameters in a SELECT, so unlike an INSERT
+# there is no target column for the database to infer their type from. When the
+# value is NULL -- `last_publish_date` is NULL for every series whose vendor
+# supplies no publish date -- PostgreSQL types the parameter as `text` and then
+# refuses to assign it to a `date` column. SQLite does not care, so a
+# SQLite-only suite never sees it and the failure lands on the first metadata
+# update against a real warehouse.
+#
+# Casting in the source fixes it for every value, NULL included, where binding
+# a parameter type does not: psycopg2 still sends an untyped NULL. DATE,
+# TIMESTAMP and INT are spelled the same in PostgreSQL and Spark SQL, and this
+# statement only ever runs on those two -- SQLite takes the plain UPDATE path
+# below -- so no dialect-specific spelling is needed.
+_COLUMN_CASTS = {
+    "first_observation": "DATE",
+    "last_observation": "DATE",
+    "last_publish_date": "DATE",
+    "observation_count": "INT",
+    "collected_at": "TIMESTAMP",
+}
+
+
+def _merge_source_column(column: str, index: int) -> str:
+    """Render one MERGE source column, typed where the column is not a string."""
+    parameter = f":{column}_{index}"
+    cast = _COLUMN_CASTS.get(column)
+    expression = f"CAST({parameter} AS {cast})" if cast else parameter
+    return f"{expression} AS {column}"
+
+
 def _merge_statement(count: int) -> TextClause:
     source = " UNION ALL ".join(
-        "SELECT " + ", ".join(f":{column}_{index} AS {column}" for column in _COLUMNS)
+        "SELECT " + ", ".join(_merge_source_column(column, index) for column in _COLUMNS)
         for index in range(count)
     )
     assignments = ", ".join(f"{column} = source.{column}" for column in _UPDATE_COLUMNS)
