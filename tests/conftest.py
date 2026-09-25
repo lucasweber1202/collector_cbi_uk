@@ -9,6 +9,7 @@ test that needed a real CBI balance would be a test that could not be committed.
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from collections.abc import Iterator
 from datetime import UTC, date, datetime
@@ -67,10 +68,48 @@ def build_sqlite_engine(tmp_path: Path) -> Engine:
     return engine
 
 
-@pytest.fixture
-def engine(tmp_path: Path) -> Iterator[Engine]:
-    """Yield a disposable database carrying the shipped DDL."""
-    created = build_sqlite_engine(tmp_path)
+def build_postgres_engine(url: str) -> Engine:
+    """Create the shipped tables in a throwaway schema on a real PostgreSQL.
+
+    The DDL is the collector's own, including CREATE SCHEMA, which SQLite
+    cannot execute at all. This is the only way the shipped statements, the
+    MERGE path and the TIMESTAMP/DATE round trip get exercised on the engine
+    production actually uses.
+    """
+    engine = create_engine(url)
+    double = init_db.double_type("postgresql")
+    with engine.begin() as conn:
+        conn.execute(text(f"DROP SCHEMA IF EXISTS {SCHEMA_NAME} CASCADE"))
+        for statement in (
+            init_db.CREATE_SCHEMA,
+            init_db.CREATE_METADATA_TABLE,
+            init_db.CREATE_TIME_SERIES_TABLE.format(double=double),
+            init_db.CREATE_AVAILABILITY_TABLE,
+            init_db.CREATE_SNAPSHOTS_TABLE,
+            init_db.CREATE_VENDOR_PROVENANCE_TABLE,
+            init_db.CREATE_LOGS_TABLE,
+        ):
+            conn.execute(text(statement))
+    return engine
+
+
+@pytest.fixture(params=["sqlite", "postgresql"])
+def engine(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[Engine]:
+    """Yield a disposable database carrying the shipped DDL.
+
+    Every persistence test runs twice when COLLECTOR_TEST_PG_URL points at a
+    PostgreSQL this suite may drop and recreate a schema in. Without it the
+    PostgreSQL pass is skipped rather than silently not happening: this
+    collector cannot reach its licensed vendor from a test, so a fixture-driven
+    run on the real engine is the only database evidence available to it.
+    """
+    if request.param == "postgresql":
+        url = os.getenv("COLLECTOR_TEST_PG_URL")
+        if not url:
+            pytest.skip("set COLLECTOR_TEST_PG_URL to run the persistence suite on PostgreSQL")
+        created = build_postgres_engine(url)
+    else:
+        created = build_sqlite_engine(tmp_path)
     try:
         yield created
     finally:

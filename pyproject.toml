@@ -26,8 +26,18 @@ lseg = ["lseg-data>=2.0"]
 vendors = ["blpapi>=3.24", "lseg-data>=2.0"]
 dev = ["mypy>=1.11", "pytest>=8.0", "ruff>=0.6"]
 
+[tool.setuptools]
+# Without an explicit declaration setuptools auto-discovery maps only a
+# non-existent "main" package, so `pip install -e .` leaves `scripts`
+# uninstalled and a clean-room `pytest` cannot import it.
+packages = ["scripts"]
+py-modules = ["main"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Keep a bare `pytest` working: conftest.py lives in tests/, so pytest prepends
+# tests/ rather than the repository root.
+pythonpath = ["."]
 
 [tool.mypy]
 python_version = "3.11"
@@ -51,4 +61,4 @@ target-version = "py311"
 extend-exclude = ["*.md"]
 
 [tool.ruff.lint.per-file-ignores]
-"scripts/databricks_engine.py" = ["BLE001", "S110"]
+"scripts/databricks_engine.py" = ["BLE001", "RUF100", "S110"]
