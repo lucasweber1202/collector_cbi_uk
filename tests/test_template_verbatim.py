@@ -24,7 +24,7 @@ TEMPLATE_COMMIT = "c12185cf98a0918afd02e2d2f505599877018c5b"
 VERBATIM: dict[str, str] = {
     ".gitignore": "f0d1368264d24d7959d3137d618930a06f33795e",
     "scripts/__init__.py": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-    "scripts/databricks_engine.py": "1d9848f5963a06902dce6e56b24d96e0f67d251b",
+    "scripts/databricks_engine.py": "73821f7a530ab5cca2f5313180d71c17173e6e59",
     ".github/copilot-instructions.md": "d58921719c9cf0fd8cf442f46d1b9b21113d28a0",
     ".github/prompts/onboard-new-api.prompt.md": "979cae7629beaa112ba8653c4ce13510779ae80e",
     ".github/skills/audit-collector/SKILL.md": "321f4f945e500c8d2ce9702aceb64d203bcc8f69",
